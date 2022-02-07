@@ -406,6 +406,43 @@ RAI_Model *RAI_ModelCreateTF(RAI_Backend backend, const char *devicestr, RAI_Mod
     ret->data = buffer;
     ret->datalen = modellen;
 
+    const char* init_all_tables_str = "init_all_tables";
+    TF_Operation* init_all_tables_op = TF_GraphOperationByName(ret->model, init_all_tables_str);
+
+    if (init_all_tables_op == NULL) {
+	    size_t len = strlen(init_all_tables_str);
+	    char *msg = RedisModule_Calloc(60 + len, sizeof(*msg));
+	    sprintf(msg, "ERR Output node named \"%s\" not found in TF graph", init_all_tables_str);
+	    RAI_SetError(error, RAI_EMODELIMPORT, msg);
+	    RedisModule_Free(msg);
+	    goto cleanup;
+    }
+
+    TF_Output output;
+    TF_Tensor* r_val;
+
+    output.oper = init_all_tables_op;
+    output.index = 0;
+    status = TF_NewStatus();
+
+
+    TF_SessionRun(ret->session, /*run_options*/ NULL,
+		    // input related parameters
+		    /*inputs*/ NULL, /*input_values*/ NULL, /*ninputs*/ 0,
+		    // output related parameters
+		    /*outputs*/ NULL, /*output_values*/ NULL,
+		    /*noutputs*/ 0,
+		    /*targets*/ &init_all_tables_op, /*ntargets*/ 1,
+		    /*run_metadata*/ NULL, status);
+
+    if (TF_GetCode(status) != TF_OK) {
+	    RAI_SetError(error, RAI_EMODELRUN, TF_Message(status));
+	    goto cleanup;
+    }
+
+    if (status)
+	    TF_DeleteStatus(status);
+
     return ret;
 
 cleanup:
